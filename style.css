@@ -333,3 +333,22 @@ body {
   background: #E2E8F0 !important;
   color: var(--navy) !important;
 }
+
+.toast {
+  border: 1px solid rgba(255, 255, 255, .25) !important;
+}
+
+.empty-state {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+}
+
+.seismic-pulse {
+  animation: seismic-pulse 1.6s ease-out infinite;
+}
+
+@keyframes seismic-pulse {
+  0% { stroke-width: 2; stroke-opacity: 1; }
+  100% { stroke-width: 10; stroke-opacity: 0; }
+}
