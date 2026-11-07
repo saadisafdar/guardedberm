@@ -6,61 +6,76 @@
 <main class="container-fluid page-shell px-3 px-lg-4"><div class="page-header mb-4"><p class="card-kicker mb-1">Operations overview</p><h1 class="h2 fw-bold mb-0">Main monitoring station</h1><p id="selected-area" class="small text-muted mt-2 mb-0">Selected area: loading...</p></div>
 <div class="row g-3 mb-4"><div class="col-12 col-md-6 col-xl-3"><div class="card-sharp p-3 h-100"><div class="card-kicker">Location risk score</div><div id="risk-value" class="metric-value mt-2">Loading...</div><span id="risk-badge" class="badge badge-risk-moderate mt-2">CALCULATING</span></div></div><div class="col-12 col-md-6 col-xl-3"><div class="card-sharp p-3 h-100"><div class="card-kicker">Open-Meteo weather</div><div id="weather-value" class="metric-value mt-2">Loading...</div><small id="weather-details" class="text-muted">Loading live conditions...</small></div></div><div class="col-12 col-md-6 col-xl-3"><div class="card-sharp p-3 h-100"><div class="card-kicker">USGS seismic feed</div><div id="seismic-value" class="metric-value mt-2">Loading...</div><small id="seismic-location" class="text-muted">Loading latest event...</small></div></div><div class="col-12 col-md-6 col-xl-3"><div class="card-sharp p-3 h-100"><div class="card-kicker">Nearby hazards</div><div id="hazard-count" class="metric-value mt-2 text-accent">0 Active</div><small class="text-muted">Verified reports within 5 km</small></div></div></div>
 <div class="d-flex flex-wrap gap-2 mb-3"><button id="live-location" class="btn btn-outline-navy btn-sm">Use My Live Location</button><button id="refresh-dashboard" class="btn btn-accent btn-sm">Refresh live data</button><div class="form-check form-switch ms-md-2 pt-1"><input id="weather-layer-toggle" class="form-check-input" type="checkbox"><label class="form-check-label small" for="weather-layer-toggle">Weather overlay</label></div></div>
-<div class="row g-4"><div class="col-12 col-xl-8"><div class="d-flex flex-wrap gap-2 align-items-center mb-2"><input id="location-search" class="form-control form-control-sm flex-grow-1" style="max-width: 24rem" placeholder="Search a city or area" aria-label="Search a city or area"><button id="location-search-button" class="btn btn-accent btn-sm" type="button">Search</button><button id="dashboard-gps" class="btn btn-outline-navy btn-sm" type="button">Use My GPS</button><span class="badge text-bg-light border">Click anywhere on the map to inspect an area</span></div><div id="map"></div></div><aside class="col-12 col-xl-4"><div class="card-sharp p-4 h-100"><div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-2"><h2 class="h5 fw-bold mb-0">Community reports</h2><a class="small text-accent" href="feed.html">View all</a></div><div id="recent-reports" class="list-group list-group-flush"></div></div></aside></div></main>
+<div class="row g-4"><div class="col-12 col-xl-8"><div class="d-flex flex-wrap gap-2 align-items-center mb-2"><input id="location-search" class="form-control form-control-sm flex-grow-1" style="max-width: 24rem" placeholder="Search a city or area" aria-label="Search a city or area"><button id="location-search-button" class="btn btn-accent btn-sm" type="button">Search</button><button id="dashboard-gps" class="btn btn-outline-navy btn-sm" type="button">Use My GPS</button><span class="badge text-bg-light border">Click anywhere on the map to inspect an area</span></div><div id="map-location-status" class="small text-muted mb-2" aria-live="polite">Selected coordinates: 33.7833, 72.7167</div><div id="map"></div></div><aside class="col-12 col-xl-4"><div class="card-sharp p-4 h-100"><div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-2"><h2 class="h5 fw-bold mb-0">Community reports</h2><a class="small text-accent" href="feed.html">View all</a></div><div id="recent-reports" class="list-group list-group-flush"></div></div></aside></div></main>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js"></script>
 <script>
-  const { getCoords, saveCoords, getReports, fetchWeather, haversineDistance, calculateRiskScore, showToast, escapeHtml } = GuardedBerm;
+  const { getCoords, saveCoords, getReports, haversineDistance, calculateRiskScore, showToast, escapeHtml } = GuardedBerm;
   const map = L.map('map').setView([33.7833, 72.7167], 12);
   const baseLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' }).addTo(map);
   const seismicLayer = L.layerGroup().addTo(map);
   const hazardLayer = L.layerGroup().addTo(map);
   const weatherLayer = L.layerGroup();
   const markerIcon = (color, label) => L.divIcon({ className: '', html: `<span aria-label="${label}" style="display:block;width:18px;height:18px;background:${color};border:3px solid #F97316;box-shadow:0 2px 5px rgba(0,0,0,.35);transform:rotate(45deg)"></span>`, iconSize: [18, 18], iconAnchor: [9, 9] });
-  let selectedMarker;
+  let selectedPin = L.marker([33.7833, 72.7167], {
+    draggable: true,
+    icon: markerIcon('#0A192F', 'Selected location')
+  }).addTo(map);
   let requestId = 0;
   L.control.layers({ 'Street map': baseLayer }, { 'Seismic activity': seismicLayer, 'Community hazards': hazardLayer, 'Weather overlay': weatherLayer }).addTo(map);
 
   function renderReports(coords) {
     const reports = getReports();
     const nearby = reports.filter(report => haversineDistance(coords.lat, coords.lon, report.lat, report.lon) <= 5);
-    document.getElementById('hazard-count').textContent = `${nearby.filter(report => report.status === 'Verified').length} Active`;
+    const hazardCount = document.getElementById('hazard-count');
+    if (hazardCount) hazardCount.textContent = `${nearby.filter(report => report.status === 'Verified').length} Active`;
     const container = document.getElementById('recent-reports');
-    container.innerHTML = nearby.length ? nearby.slice(0, 5).map(report => `<div class="list-group-item px-0 py-3"><div class="d-flex justify-content-between"><span class="badge ${report.status === 'Verified' ? 'badge-risk-critical' : 'badge-risk-moderate'}">${escapeHtml(report.category.toUpperCase())}</span><small class="text-muted">${haversineDistance(coords.lat, coords.lon, report.lat, report.lon).toFixed(1)} km</small></div><strong class="d-block mt-2">${escapeHtml(report.status)}</strong><small class="text-muted">${escapeHtml(report.description)}</small></div>`).join('') : '<div class="empty-state py-4 text-muted">No community reports near your saved location.</div>';
+    if (container) container.innerHTML = nearby.length ? nearby.slice(0, 5).map(report => `<div class="list-group-item px-0 py-3"><div class="d-flex justify-content-between"><span class="badge ${report.status === 'Verified' ? 'badge-risk-critical' : 'badge-risk-moderate'}">${escapeHtml(report.category.toUpperCase())}</span><small class="text-muted">${haversineDistance(coords.lat, coords.lon, report.lat, report.lon).toFixed(1)} km</small></div><strong class="d-block mt-2">${escapeHtml(report.status)}</strong><small class="text-muted">${escapeHtml(report.description)}</small></div>`).join('') : '<div class="empty-state py-4 text-muted">No community reports near your saved location.</div>';
     hazardLayer.clearLayers();
     reports.forEach(report => L.circleMarker([report.lat, report.lon], { color: report.status === 'Verified' ? '#C62828' : '#D99A00', radius: 7 }).bindPopup(`<strong>${report.category}</strong><br>${report.description}`).addTo(hazardLayer));
   }
 
-  async function loadDashboard(coords = getCoords(), shouldMove = true) {
+  async function selectDashboardLocation(lat, lng) {
+    const coords = { lat: Number(lat), lon: Number(lng) };
+    if (!Number.isFinite(coords.lat) || !Number.isFinite(coords.lon)) return;
     const currentRequest = ++requestId;
-    if (shouldMove) map.flyTo([coords.lat, coords.lon], 13, { duration: .7 });
-    saveCoords(coords.lat, coords.lon);
-    if (selectedMarker) selectedMarker.setLatLng([coords.lat, coords.lon]);
-    else selectedMarker = L.marker([coords.lat, coords.lon], { icon: markerIcon('#0A192F', 'Selected location') }).addTo(map);
+    selectedPin.setLatLng([coords.lat, coords.lon]);
+    map.panTo([coords.lat, coords.lon], { animate: true, duration: .6 });
+    try { saveCoords(coords.lat, coords.lon); } catch (error) { console.error('Unable to save selected location:', error); }
     renderReports(coords);
-    const area = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lon}`).then(response => {
-      if (!response.ok) throw new Error('Reverse geocoding failed.');
-      return response.json();
-    }).catch(() => null);
+    const area = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lon}`)
+      .then(response => response.ok ? response.json() : null)
+      .catch(() => null);
     if (currentRequest !== requestId) return;
-    document.getElementById('selected-area').textContent = `Selected area: ${area?.display_name || 'Pinned location'}`;
-    selectedMarker.bindPopup(`<strong>${escapeHtml(area?.display_name || 'Pinned location')}</strong>`).openPopup();
+    const areaName = area?.display_name || `Lat: ${coords.lat.toFixed(5)}, Lng: ${coords.lon.toFixed(5)}`;
+    const areaElement = document.getElementById('selected-area');
+    if (areaElement) areaElement.textContent = `Selected area: ${areaName}`;
+    const statusElement = document.getElementById('map-location-status');
+    if (statusElement) statusElement.textContent = `Lat: ${coords.lat.toFixed(5)}, Lng: ${coords.lon.toFixed(5)} · ${areaName}`;
+    selectedPin.bindPopup(`<strong>${escapeHtml(areaName)}</strong>`).openPopup();
     let precipitation = 0;
     let earthquakes = [];
     try {
-      const weather = await fetchWeather(coords);
+      const weather = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,precipitation`).then(response => {
+        if (!response.ok) throw new Error('Weather service failed.');
+        return response.json();
+      });
       const current = weather.current;
       precipitation = Number(current.precipitation) || 0;
-      document.getElementById('weather-value').textContent = `${current.temperature_2m}°C`;
-      document.getElementById('weather-details').textContent = `Precipitation ${current.precipitation} mm/h · Wind ${current.wind_speed_10m} km/h`;
+      const weatherValue = document.getElementById('weather-value');
+      if (weatherValue) weatherValue.textContent = `${current.temperature_2m}°C`;
+      const weatherDetails = document.getElementById('weather-details');
+      if (weatherDetails) weatherDetails.textContent = `Precipitation ${current.precipitation} mm/h`;
       weatherLayer.clearLayers();
       L.circle([coords.lat, coords.lon], { color: '#F97316', fillColor: '#F97316', fillOpacity: .12, radius: Math.max(1000, current.precipitation * 1000) }).bindPopup(`Precipitation: ${current.precipitation} mm/h`).addTo(weatherLayer);
     } catch (error) {
-      document.getElementById('weather-value').textContent = 'Data Unavailable';
-      document.getElementById('weather-details').textContent = 'Data Unavailable';
+      const weatherValue = document.getElementById('weather-value');
+      if (weatherValue) weatherValue.textContent = 'Data Unavailable';
+      const weatherDetails = document.getElementById('weather-details');
+      if (weatherDetails) weatherDetails.textContent = 'Data Unavailable';
       showToast('Network error fetching live weather.', 'danger');
     }
     try {
-      const data = await fetch(`https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&latitude=${coords.lat}&longitude=${coords.lon}&maxradiuskm=300&minmagnitude=2.5&limit=5&orderby=time`).then(response => {
+      const data = await fetch(`https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&latitude=${coords.lat}&longitude=${coords.lon}&maxradiuskm=300&minmagnitude=2.5&limit=1`).then(response => {
         if (!response.ok) throw new Error('Seismic service failed.');
         return response.json();
       });
@@ -71,24 +86,32 @@
         const magnitude = event.properties.mag;
         L.circleMarker([lat, lon], { color: '#C62828', fillColor: '#C62828', fillOpacity: .55, radius: Math.max(6, magnitude * 2), className: 'seismic-pulse' }).bindPopup(`<strong>M ${magnitude.toFixed(1)}</strong><br>${event.properties.place || 'Unknown location'}`).addTo(seismicLayer);
       });
-      const critical = earthquakes.sort((a, b) => b.properties.mag - a.properties.mag)[0];
-      document.getElementById('seismic-value').textContent = critical ? `M ${critical.properties.mag.toFixed(1)}` : 'No events';
-      document.getElementById('seismic-location').textContent = critical?.properties.place || 'No recent activity';
+      const critical = earthquakes[0];
+      const seismicValue = document.getElementById('seismic-value');
+      if (seismicValue) seismicValue.textContent = critical ? `M ${critical.properties.mag.toFixed(1)}` : 'No events';
+      const seismicLocation = document.getElementById('seismic-location');
+      if (seismicLocation) seismicLocation.textContent = critical?.properties.place || 'No recent activity';
     } catch (error) {
-      document.getElementById('seismic-value').textContent = 'Data Unavailable';
-      document.getElementById('seismic-location').textContent = 'Data Unavailable';
+      const seismicValue = document.getElementById('seismic-value');
+      if (seismicValue) seismicValue.textContent = 'Data Unavailable';
+      const seismicLocation = document.getElementById('seismic-location');
+      if (seismicLocation) seismicLocation.textContent = 'Data Unavailable';
       showToast('Network error fetching live seismic feed.', 'danger');
     }
     if (currentRequest !== requestId) return;
     const score = calculateRiskScore(coords.lat, coords.lon, precipitation, earthquakes);
-    document.getElementById('risk-value').textContent = `${Math.round(score)} / 100`;
+    const riskValue = document.getElementById('risk-value');
+    if (riskValue) riskValue.textContent = `${Math.round(score)} / 100`;
     const badge = document.getElementById('risk-badge');
-    badge.textContent = score >= 70 ? 'HIGH RISK' : score >= 40 ? 'MODERATE RISK' : 'LOW RISK';
-    badge.className = `badge mt-2 ${score >= 70 ? 'badge-risk-high' : score >= 40 ? 'badge-risk-moderate' : 'badge-risk-low'}`;
+    if (badge) {
+      badge.textContent = score >= 70 ? 'HIGH RISK' : score >= 40 ? 'MODERATE RISK' : 'LOW RISK';
+      badge.className = `badge mt-2 ${score >= 70 ? 'badge-risk-high' : score >= 40 ? 'badge-risk-moderate' : 'badge-risk-low'}`;
+    }
   }
-  async function selectLocation(coords) { await loadDashboard({ lat: Number(coords.lat ?? coords.latitude), lon: Number(coords.lon ?? coords.longitude) }); }
-  document.getElementById('location-search-button').addEventListener('click', async () => {
-    const query = document.getElementById('location-search').value.trim();
+  const searchButton = document.getElementById('location-search-button');
+  const searchInput = document.getElementById('location-search');
+  if (searchButton && searchInput) searchButton.addEventListener('click', async () => {
+    const query = searchInput.value.trim();
     if (!query) return showToast('Enter a city or area to search.', 'danger');
     try {
       const results = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`).then(response => {
@@ -96,16 +119,27 @@
         return response.json();
       });
       if (!results[0]) throw new Error('Location not found.');
-      await selectLocation({ lat: results[0].lat, lon: results[0].lon });
+      await selectDashboardLocation(results[0].lat, results[0].lon);
     } catch (error) { showToast(error.message, 'danger'); }
   });
-  document.getElementById('location-search').addEventListener('keydown', event => { if (event.key === 'Enter') document.getElementById('location-search-button').click(); });
-  document.getElementById('dashboard-gps').addEventListener('click', () => navigator.geolocation.getCurrentPosition(position => selectLocation(position.coords), () => showToast('Unable to access your GPS location.', 'danger')));
-  map.on('click', event => selectLocation(event.latlng));
-  document.getElementById('refresh-dashboard').addEventListener('click', () => loadDashboard());
-  document.getElementById('live-location').addEventListener('click', () => navigator.geolocation.getCurrentPosition(position => selectLocation(position.coords), () => showToast('Unable to access your live location.', 'danger')));
-  document.getElementById('weather-layer-toggle').addEventListener('change', event => event.target.checked ? weatherLayer.addTo(map) : map.removeLayer(weatherLayer));
-  loadDashboard();
+  if (searchInput && searchButton) searchInput.addEventListener('keydown', event => { if (event.key === 'Enter') searchButton.click(); });
+  const dashboardGps = document.getElementById('dashboard-gps');
+  if (dashboardGps) dashboardGps.addEventListener('click', () => navigator.geolocation.getCurrentPosition(position => selectDashboardLocation(position.coords.latitude, position.coords.longitude), () => showToast('Unable to access your GPS location.', 'danger')));
+  map.on('click', e => selectDashboardLocation(e.latlng.lat, e.latlng.lng));
+  selectedPin.on('dragend', () => {
+    const pos = selectedPin.getLatLng();
+    selectDashboardLocation(pos.lat, pos.lng);
+  });
+  const refreshDashboard = document.getElementById('refresh-dashboard');
+  if (refreshDashboard) refreshDashboard.addEventListener('click', () => {
+    const coords = getCoords();
+    selectDashboardLocation(coords.lat, coords.lon);
+  });
+  const liveLocation = document.getElementById('live-location');
+  if (liveLocation) liveLocation.addEventListener('click', () => navigator.geolocation.getCurrentPosition(position => selectDashboardLocation(position.coords.latitude, position.coords.longitude), () => showToast('Unable to access your live location.', 'danger')));
+  const weatherToggle = document.getElementById('weather-layer-toggle');
+  if (weatherToggle) weatherToggle.addEventListener('change', event => event.target.checked ? weatherLayer.addTo(map) : map.removeLayer(weatherLayer));
+  selectDashboardLocation(33.7833, 72.7167);
   setTimeout(() => map.invalidateSize(), 300);
   window.addEventListener('resize', () => setTimeout(() => map.invalidateSize(), 300));
 </script>
