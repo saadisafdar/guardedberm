@@ -1,80 +1,185 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Safe Route | GuardedBerm</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="style.css"></head>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Safe Route | GuardedBerm</title>
+  <link rel="icon" href="logo.png" type="image/png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
 <body>
-<nav class="navbar navbar-expand-lg navbar-dark navbar-custom px-3 px-lg-4 py-3"><a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="dashboard.html"><img src="image_1.png" width="32" height="32" alt="">Guarded<span>Berm</span></a><button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"><span class="navbar-toggler-icon"></span></button><div class="collapse navbar-collapse" id="mainNav"><ul class="navbar-nav ms-auto gap-lg-2"><li><a class="nav-link" href="dashboard.html">Dashboard</a></li><li><a class="nav-link active" href="saferoute.html">Safe Route</a></li><li><a class="nav-link" href="report.html">Report Hazard</a></li><li><a class="nav-link" href="feed.html">Hazard Feed</a></li><li><a class="nav-link" href="alerts.html">Alerts</a></li><li><a class="nav-link" href="profile.html">Profile</a></li></ul></div></nav>
-<main class="container-fluid page-shell px-3 px-lg-4"><div class="page-header mb-4"><p class="card-kicker mb-1">Navigation intelligence</p><h1 class="h2 fw-bold mb-0">Hazard-aware routing</h1></div><div class="row g-4"><section class="col-12 col-lg-4"><div class="card-sharp p-4"><form id="route-form"><label class="form-label fw-semibold" for="start">Start address</label><input id="start" class="form-control mb-2" placeholder="Home or current address" required><button id="use-home" class="btn btn-outline-navy btn-sm mb-3" type="button">Use saved home</button><label class="form-label fw-semibold" for="destination">Destination address</label><input id="destination" class="form-control mb-3" placeholder="Enter target destination" required><button class="btn btn-accent w-100 py-2 mb-3" type="submit">Calculate driving route</button><div id="route-status" class="small text-muted" aria-live="polite"></div></form><div id="route-result" class="mt-4"></div></div></section><section class="col-12 col-lg-8"><div class="d-flex flex-wrap justify-content-end gap-2 mb-2"><button id="set-start" class="btn btn-outline-navy btn-sm" type="button">Set Start on Map</button><button id="set-destination" class="btn btn-outline-navy btn-sm" type="button">Set Destination on Map</button><button id="live-location" class="btn btn-outline-navy btn-sm" type="button">Use My Live Location</button></div><div id="map"></div></section></div></main>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js"></script><script>
-  const { getCoords, geocodeAddress, reverseGeocode, getReports, haversineDistance, showToast, setLoading } = GuardedBerm;
-  const home = getCoords();
-  const map = L.map('map').setView([home.lat, home.lon], 12);
-  const base = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' }).addTo(map);
-  const routeLayer = L.layerGroup().addTo(map);
-  const hazardLayer = L.layerGroup().addTo(map);
-  const icon = (color, label) => L.divIcon({ className: '', html: `<span aria-label="${label}" style="display:block;width:18px;height:18px;background:${color};border:3px solid ${color === '#0A192F' ? '#F97316' : '#0A192F'};box-shadow:0 2px 5px rgba(0,0,0,.35);transform:rotate(45deg)"></span>`, iconSize: [18, 18], iconAnchor: [9, 9] });
-  let startPoint;
-  let destinationPoint;
-  let selecting = null;
-  let startMarker;
-  let destinationMarker;
+  <nav class="navbar navbar-expand-lg navbar-dark navbar-custom px-3 px-lg-4 py-3">
+    <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="dashboard.html"><img src="logo.png" width="32" height="32" alt="">Guarded<span>Berm</span></a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"><span class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="mainNav">
+      <ul class="navbar-nav ms-auto gap-lg-2">
+        <li><a class="nav-link" href="dashboard.html">Dashboard</a></li>
+        <li><a class="nav-link active" href="saferoute.html">Safe Route</a></li>
+        <li><a class="nav-link" href="report.html">Report Hazard</a></li>
+        <li><a class="nav-link" href="feed.html">Hazard Feed</a></li>
+        <li><a class="nav-link" href="alerts.html">Alerts</a></li>
+        <li><a class="nav-link" href="profile.html">Profile</a></li>
+      </ul>
+    </div>
+  </nav>
 
-  function drawHazards() {
-    getReports().filter(report => report.status === 'Verified').forEach(report => {
-      L.circle([report.lat, report.lon], { radius: 5000, color: '#C62828', fillColor: '#C62828', fillOpacity: .1, weight: 2 }).bindPopup(`<strong>${report.category}</strong><br>${report.description}`).addTo(hazardLayer);
-      L.marker([report.lat, report.lon], { icon: icon('#C62828', 'Active hazard') }).addTo(hazardLayer);
-    });
-  }
-  function updateMarker(type, coords) {
-    const point = { lat: Number(coords.lat), lon: Number(coords.lon ?? coords.lng) };
-    if (type === 'start') {
-      startPoint = point;
-      if (startMarker) startMarker.setLatLng([point.lat, point.lon]); else {
-        startMarker = L.marker([point.lat, point.lon], { icon: icon('#0A192F', 'Start'), draggable: true }).addTo(map);
-        startMarker.on('dragend', () => { const position = startMarker.getLatLng(); startPoint = { lat: position.lat, lon: position.lng }; document.getElementById('start').value = `${position.lat}, ${position.lng}`; recalculateIfReady(); });
+  <main class="page-shell px-3 px-lg-4">
+    <div class="page-header mb-4">
+      <p class="card-kicker mb-1">Navigation intelligence</p>
+      <h1 class="h2 fw-bold mb-0">Hazard-aware routing</h1>
+    </div>
+
+    <div class="row g-4">
+      <section class="col-12 col-lg-4">
+        <div class="card-sharp p-4">
+          <form id="route-form">
+            <label class="form-label fw-semibold">Start address</label>
+            <input id="start" class="form-control mb-2" placeholder="Home or current address" required>
+            <button id="use-home" class="btn btn-outline-navy btn-sm mb-3" type="button">Use saved home</button>
+            <label class="form-label fw-semibold">Destination address</label>
+            <input id="destination" class="form-control mb-3" placeholder="Enter target destination" required>
+            <button class="btn btn-accent w-100 py-2 mb-3" type="submit">Calculate driving route</button>
+            <div id="route-status" class="small text-muted"></div>
+          </form>
+          <div id="route-result" class="mt-4"></div>
+        </div>
+      </section>
+      <section class="col-12 col-lg-8">
+        <div class="d-flex flex-wrap justify-content-end gap-2 mb-2">
+          <button id="set-start" class="btn btn-outline-navy btn-sm" type="button">Set Start on Map</button>
+          <button id="set-destination" class="btn btn-outline-navy btn-sm" type="button">Set Destination on Map</button>
+          <button id="live-location" class="btn btn-outline-navy btn-sm" type="button">Use My Location</button>
+        </div>
+        <div class="map-frame"><div id="map"></div></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+  <script src="map.js"></script>
+  <script>
+    (async function () {
+      const home = GuardedBerm.getCoords();
+      const map = await MapKit.getMap('map');
+      if (!map) { console.error('Map failed'); return; }
+
+      const routeLayer = L.layerGroup().addTo(map);
+      const hazardLayer = L.layerGroup().addTo(map);
+      let startPt, destPt, startMarker, destMarker, selectingMode = null;
+
+      GuardedBerm.getReports().filter(r => r.status === 'Verified').forEach(r => {
+        L.circle([r.lat, r.lon], { radius: 5000, color: '#C62828', fillOpacity: .1 }).addTo(hazardLayer);
+        L.marker([r.lat, r.lon]).bindPopup(`<strong>${r.category}</strong><br>${r.description}`).addTo(hazardLayer);
+      });
+
+      function setMarker(type, lat, lon) {
+        const pos = [lat, lon];
+        if (type === 'start') {
+          startPt = { lat, lon };
+          if (startMarker) startMarker.setLatLng(pos);
+          else {
+            startMarker = L.marker(pos, { draggable: true }).addTo(map);
+            startMarker.on('dragend', () => {
+              const p = startMarker.getLatLng();
+              startPt = { lat: p.lat, lon: p.lng };
+              document.getElementById('start').value = `${p.lat}, ${p.lng}`;
+              checkRoute();
+            });
+          }
+        } else {
+          destPt = { lat, lon };
+          if (destMarker) destMarker.setLatLng(pos);
+          else {
+            destMarker = L.marker(pos, { draggable: true }).addTo(map);
+            destMarker.on('dragend', () => {
+              const p = destMarker.getLatLng();
+              destPt = { lat: p.lat, lon: p.lng };
+              document.getElementById('destination').value = `${p.lat}, ${p.lng}`;
+              checkRoute();
+            });
+          }
+        }
       }
-    } else {
-      destinationPoint = point;
-      if (destinationMarker) destinationMarker.setLatLng([point.lat, point.lon]); else {
-        destinationMarker = L.marker([point.lat, point.lon], { icon: icon('#F97316', 'Destination'), draggable: true }).addTo(map);
-        destinationMarker.on('dragend', () => { const position = destinationMarker.getLatLng(); destinationPoint = { lat: position.lat, lon: position.lng }; document.getElementById('destination').value = `${position.lat}, ${position.lng}`; recalculateIfReady(); });
+
+      async function checkRoute() { if (startPt && destPt) await calculateRoute(startPt, destPt); }
+
+      async function calculateRoute(start, dest) {
+        const btn = document.querySelector('#route-form button[type="submit"]');
+        GuardedBerm.setLoading(btn, true, 'Routing...');
+        document.getElementById('route-status').textContent = '';
+        routeLayer.clearLayers();
+        try {
+          const url = `https://router.project-osrm.org/route/v1/driving/${start.lon},${start.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson&alternatives=true`;
+          const res = await fetch(url);
+          const data = await res.json();
+          if (data.code !== 'Ok' || !data.routes.length) throw new Error('No route found.');
+          const directRoute = data.routes[0];
+          const hazards = GuardedBerm.getReports().filter(r => r.status === 'Verified');
+          const directHasHazard = directRoute.geometry.coordinates.some(([lon, lat]) => hazards.some(h => GuardedBerm.haversineDistance(lat, lon, h.lat, h.lon) <= 5));
+
+          const directLine = L.geoJSON(directRoute.geometry, { style: { color: directHasHazard ? '#C62828' : '#2563EB', weight: 5, dashArray: directHasHazard ? '10 8' : null } }).addTo(routeLayer);
+          const safeRoute = data.routes.slice(1).find(r => !r.geometry.coordinates.some(([lon, lat]) => hazards.some(h => GuardedBerm.haversineDistance(lat, lon, h.lat, h.lon) <= 5)));
+          if (safeRoute) L.geoJSON(safeRoute.geometry, { style: { color: '#5E9B9A', weight: 5 } }).addTo(routeLayer);
+          map.fitBounds(directLine.getBounds(), { padding: [20, 20] });
+
+          const riskScore = Math.min(100, (directHasHazard ? 55 : 10) + (hazards.length * 5));
+          let html = `<div class="border p-3"><strong>Fastest Route</strong><div class="small text-muted">${(directRoute.distance / 1000).toFixed(1)} km · ${Math.round(directRoute.duration / 60)} min</div>${directHasHazard ? '<span class="text-danger small fw-bold">⚠️ Crosses hazard buffer</span>' : ''}`;
+          if (safeRoute) html += `<hr class="my-2"><strong class="text-success">Safe Detour</strong><div class="small text-muted">${(safeRoute.distance / 1000).toFixed(1)} km · ${Math.round(safeRoute.duration / 60)} min</div>`;
+          html += `<div class="mt-2"><strong>Risk Score:</strong> ${Math.round(riskScore)} / 100</div></div>`;
+          document.getElementById('route-result').innerHTML = html;
+        } catch (e) {
+          document.getElementById('route-status').textContent = 'Route unavailable.';
+          GuardedBerm.showToast(e.message, 'danger');
+        } finally {
+          GuardedBerm.setLoading(btn, false);
+        }
       }
-    }
-  }
-  function routeIntersectsHazard(route) {
-    const hazards = getReports().filter(report => report.status === 'Verified');
-    return route.geometry.coordinates.some(([lon, lat]) => hazards.some(hazard => haversineDistance(lat, lon, hazard.lat, hazard.lon) <= 5));
-  }
-  async function reverseFill(type, coords) {
-    const address = await reverseGeocode(coords.lat, coords.lon);
-    document.getElementById(type === 'start' ? 'start' : 'destination').value = address;
-  }
-  async function calculateRoute(start, destination, button) {
-    setLoading(button, true, 'Routing...');
-    try {
-      const url = `https://router.project-osrm.org/route/v1/driving/${start.lon},${start.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson&alternatives=true`;
-      const data = await fetch(url).then(response => { if (!response.ok) throw new Error('Routing service failed.'); return response.json(); });
-      if (data.code !== 'Ok' || !data.routes?.[0]) throw new Error('No driving route found.');
-      routeLayer.clearLayers();
-      const direct = data.routes[0];
-      const directHazard = routeIntersectsHazard(direct);
-      const directLine = L.geoJSON(direct.geometry, { style: { color: directHazard ? '#C62828' : '#2563EB', weight: 5, dashArray: directHazard ? '10 8' : null } }).bindPopup(`Direct/Fastest Route${directHazard ? ' - hazard buffer crossed' : ''}`).addTo(routeLayer);
-      const safe = data.routes.slice(1).find(route => !routeIntersectsHazard(route));
-      if (safe) L.geoJSON(safe.geometry, { style: { color: '#138A5A', weight: 5 } }).bindPopup('Safe Detour Route').addTo(routeLayer);
-      map.fitBounds(directLine.getBounds(), { padding: [20, 20] });
-      const riskScore = Math.min(100, (directHazard ? 55 : 10) + getReports().filter(report => report.status === 'Verified').length * 5);
-      document.getElementById('route-result').innerHTML = `<div class="border p-3"><strong>Direct/Fastest Route</strong><div class="small text-muted mt-2">${(direct.distance / 1000).toFixed(1)} km · ${Math.round(direct.duration / 60)} min · ${directHazard ? 'Hazard buffer crossed' : 'Clear of reported hazards'}</div>${safe ? `<hr class="my-2"><strong class="text-success">Safe Detour Route</strong><div class="small text-muted mt-2">${(safe.distance / 1000).toFixed(1)} km · ${Math.round(safe.duration / 60)} min</div>` : ''}<div class="mt-2"><strong>Risk Score:</strong> ${Math.round(riskScore)} / 100</div></div>`;
-      document.getElementById('route-status').textContent = safe ? 'Direct and safe alternative routes updated.' : 'Direct route updated; no clear alternative was returned.';
-    } catch (error) { document.getElementById('route-status').textContent = 'Route unavailable.'; showToast(error.message, 'danger'); } finally { setLoading(button, false); }
-  }
-  async function resolveInput(id) { return geocodeAddress(document.getElementById(id).value.trim()); }
-  async function recalculateIfReady() { if (startPoint && destinationPoint) await calculateRoute(startPoint, destinationPoint, document.querySelector('#route-form button[type="submit"]')); }
-  document.getElementById('use-home').addEventListener('click', () => { document.getElementById('start').value = `${home.lat}, ${home.lon}`; updateMarker('start', home); map.setView([home.lat, home.lon], 13); });
-  document.getElementById('live-location').addEventListener('click', () => navigator.geolocation.getCurrentPosition(position => { const coords = { lat: position.coords.latitude, lon: position.coords.longitude }; updateMarker('start', coords); document.getElementById('start').value = `${coords.lat}, ${coords.lon}`; map.setView([coords.lat, coords.lon], 15); }, () => showToast('Unable to access your live location.', 'danger')));
-  document.getElementById('set-start').addEventListener('click', event => { selecting = 'start'; event.currentTarget.classList.add('active'); });
-  document.getElementById('set-destination').addEventListener('click', event => { selecting = 'destination'; event.currentTarget.classList.add('active'); });
-  map.on('click', async event => { if (!selecting) return; const type = selecting; const coords = { lat: event.latlng.lat, lon: event.latlng.lng }; selecting = null; document.getElementById(type === 'start' ? 'set-start' : 'set-destination').classList.remove('active'); updateMarker(type, coords); try { await reverseFill(type, coords); await recalculateIfReady(); } catch (error) { showToast(error.message, 'danger'); } });
-  document.getElementById('route-form').addEventListener('submit', async event => { event.preventDefault(); const button = event.target.querySelector('button[type="submit"]'); try { const start = await resolveInput('start'); const destination = await resolveInput('destination'); updateMarker('start', start); updateMarker('destination', destination); await calculateRoute(start, destination, button); } catch (error) { showToast(error.message, 'danger'); } });
-  drawHazards();
-  L.control.layers({ 'Street map': base }, { 'Routes': routeLayer, 'Active hazards': hazardLayer }).addTo(map);
-  setTimeout(() => map.invalidateSize(), 300);
-  window.addEventListener('resize', () => setTimeout(() => map.invalidateSize(), 300));
-</script></body></html>
+
+      document.getElementById('route-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          const start = await GuardedBerm.geocodeAddress(document.getElementById('start').value);
+          const dest = await GuardedBerm.geocodeAddress(document.getElementById('destination').value);
+          setMarker('start', start.lat, start.lon);
+          setMarker('destination', dest.lat, dest.lon);
+          await calculateRoute(start, dest);
+        } catch (err) { GuardedBerm.showToast(err.message, 'danger'); }
+      });
+
+      document.getElementById('set-start').addEventListener('click', () => { selectingMode = 'start'; });
+      document.getElementById('set-destination').addEventListener('click', () => { selectingMode = 'dest'; });
+
+      map.on('click', async (e) => {
+        if (!selectingMode) return;
+        const { lat, lng } = e.latlng;
+        setMarker(selectingMode, lat, lng);
+        try {
+          const address = await GuardedBerm.reverseGeocode(lat, lng);
+          document.getElementById(selectingMode === 'start' ? 'start' : 'destination').value = address;
+          checkRoute();
+        } catch (err) { console.error(err); }
+        selectingMode = null;
+      });
+
+      document.getElementById('use-home').addEventListener('click', () => {
+        document.getElementById('start').value = `${home.lat}, ${home.lon}`;
+        setMarker('start', home.lat, home.lon);
+        map.setView([home.lat, home.lon], 13);
+      });
+
+      document.getElementById('live-location').addEventListener('click', () => {
+        navigator.geolocation.getCurrentPosition(pos => {
+          const { latitude, longitude } = pos.coords;
+          setMarker('start', latitude, longitude);
+          document.getElementById('start').value = `${latitude}, ${longitude}`;
+          map.setView([latitude, longitude], 15);
+        }, () => GuardedBerm.showToast('GPS access denied.', 'danger'));
+      });
+    })();
+  </script>
+</body>
+</html>
