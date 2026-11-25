@@ -21,6 +21,7 @@
         <li><a class="nav-link" href="feed.html">Hazard Feed</a></li>
         <li><a class="nav-link" href="alerts.html">Alerts</a></li>
         <li><a class="nav-link" href="profile.html">Profile</a></li>
+        <li class="ms-lg-2"><button class="btn btn-sm btn-outline-navy logout-btn" type="button">Logout</button></li>
       </ul>
     </div>
   </nav>
@@ -35,15 +36,32 @@
       <section class="col-12 col-lg-4">
         <div class="card-sharp p-4">
           <form id="route-form">
-            <label class="form-label fw-semibold">Start address</label>
-            <input id="start" class="form-control mb-2" placeholder="Home or current address" required>
-            <button id="use-home" class="btn btn-outline-navy btn-sm mb-3" type="button">Use saved home</button>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label fw-semibold mb-0" for="start">Start address</label>
+              <button id="use-home" class="btn btn-outline-navy btn-sm" type="button">Use saved home</button>
+            </div>
+            <input id="start" class="form-control mb-3" placeholder="Home or current address" required>
             <label class="form-label fw-semibold">Destination address</label>
             <input id="destination" class="form-control mb-3" placeholder="Enter target destination" required>
+            <fieldset class="border p-3 mb-3">
+              <legend class="float-none w-auto px-1 fs-6 fw-semibold mb-2">Route safety preferences</legend>
+              <div class="form-check"><input id="avoid-floods" class="form-check-input route-preference" type="checkbox" checked><label class="form-check-label" for="avoid-floods">Avoid Flood Zones</label></div>
+              <div class="form-check"><input id="avoid-landslides" class="form-check-input route-preference" type="checkbox" checked><label class="form-check-label" for="avoid-landslides">Avoid Landslides</label></div>
+              <div class="form-check"><input id="main-roads-only" class="form-check-input route-preference" type="checkbox"><label class="form-check-label" for="main-roads-only">Main Roads Only</label></div>
+            </fieldset>
             <button class="btn btn-accent w-100 py-2 mb-3" type="submit">Calculate driving route</button>
             <div id="route-status" class="small text-muted"></div>
           </form>
-          <div id="route-result" class="mt-4"></div>
+          <div id="route-result" class="mt-4">
+            <div class="border p-3">
+              <div class="card-kicker mb-2">Route comparison</div>
+              <div class="d-flex justify-content-between small"><strong>Fastest route</strong><span>Awaiting locations</span></div>
+              <hr class="my-2">
+              <div class="d-flex justify-content-between small"><strong>Safer alternative</strong><span>Hazard-aware check</span></div>
+              <p id="travel-mode-summary" class="small text-accent fw-semibold mb-1 mt-2"></p>
+              <p class="small text-muted mb-0">Enter a start and destination to compare live route options.</p>
+            </div>
+          </div>
         </div>
       </section>
       <section class="col-12 col-lg-8">
@@ -70,10 +88,25 @@
       const routeLayer = L.layerGroup().addTo(map);
       const hazardLayer = L.layerGroup().addTo(map);
       let startPt, destPt, startMarker, destMarker, selectingMode = null;
+      const travelMode = GuardedBerm.getValue('guardedberm_travel_mode') || 'Car';
+      GuardedBerm.setText('travel-mode-summary', `Risk notes tailored for ${travelMode.toLowerCase()} travel.`);
+      const preferenceIds = ['avoid-floods', 'avoid-landslides', 'main-roads-only'];
+      preferenceIds.forEach(id => {
+        const stored = GuardedBerm.getValue(`guardedberm_${id}`);
+        GuardedBerm.setChecked(id, stored === null ? id !== 'main-roads-only' : stored === 'true');
+        document.getElementById(id).addEventListener('change', e => GuardedBerm.setValue(`guardedberm_${id}`, e.target.checked));
+      });
+
+      function selectedHazards() {
+        const categories = [];
+        if (document.getElementById('avoid-floods').checked) categories.push('Flooding');
+        if (document.getElementById('avoid-landslides').checked) categories.push('Landslide');
+        return GuardedBerm.getReports().filter(r => r.status === 'Verified' && categories.includes(r.category));
+      }
 
       GuardedBerm.getReports().filter(r => r.status === 'Verified').forEach(r => {
-        L.circle([r.lat, r.lon], { radius: 5000, color: '#C62828', fillOpacity: .1 }).addTo(hazardLayer);
-        L.marker([r.lat, r.lon]).bindPopup(`<strong>${r.category}</strong><br>${r.description}`).addTo(hazardLayer);
+        L.circle([r.lat, r.lon], { radius: 1000, color: '#C62828', weight: 1, fillOpacity: .06 }).addTo(hazardLayer);
+        L.marker([r.lat, r.lon]).bindPopup(`<strong>${GuardedBerm.escapeHtml(r.category)}</strong><br>${GuardedBerm.escapeHtml(r.description)}`).addTo(hazardLayer);
       });
 
       function setMarker(type, lat, lon) {
@@ -86,7 +119,7 @@
             startMarker.on('dragend', () => {
               const p = startMarker.getLatLng();
               startPt = { lat: p.lat, lon: p.lng };
-              document.getElementById('start').value = `${p.lat}, ${p.lng}`;
+              GuardedBerm.setValueForElement('start', `${p.lat}, ${p.lng}`);
               checkRoute();
             });
           }
@@ -98,7 +131,7 @@
             destMarker.on('dragend', () => {
               const p = destMarker.getLatLng();
               destPt = { lat: p.lat, lon: p.lng };
-              document.getElementById('destination').value = `${p.lat}, ${p.lng}`;
+              GuardedBerm.setValueForElement('destination', `${p.lat}, ${p.lng}`);
               checkRoute();
             });
           }
@@ -110,7 +143,7 @@
       async function calculateRoute(start, dest) {
         const btn = document.querySelector('#route-form button[type="submit"]');
         GuardedBerm.setLoading(btn, true, 'Routing...');
-        document.getElementById('route-status').textContent = '';
+        GuardedBerm.setText('route-status', '');
         routeLayer.clearLayers();
         try {
           const url = `https://router.project-osrm.org/route/v1/driving/${start.lon},${start.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson&alternatives=true`;
@@ -118,7 +151,7 @@
           const data = await res.json();
           if (data.code !== 'Ok' || !data.routes.length) throw new Error('No route found.');
           const directRoute = data.routes[0];
-          const hazards = GuardedBerm.getReports().filter(r => r.status === 'Verified');
+          const hazards = selectedHazards();
           const directHasHazard = directRoute.geometry.coordinates.some(([lon, lat]) => hazards.some(h => GuardedBerm.haversineDistance(lat, lon, h.lat, h.lon) <= 5));
 
           const directLine = L.geoJSON(directRoute.geometry, { style: { color: directHasHazard ? '#C62828' : '#2563EB', weight: 5, dashArray: directHasHazard ? '10 8' : null } }).addTo(routeLayer);
@@ -127,12 +160,16 @@
           map.fitBounds(directLine.getBounds(), { padding: [20, 20] });
 
           const riskScore = Math.min(100, (directHasHazard ? 55 : 10) + (hazards.length * 5));
-          let html = `<div class="border p-3"><strong>Fastest Route</strong><div class="small text-muted">${(directRoute.distance / 1000).toFixed(1)} km · ${Math.round(directRoute.duration / 60)} min</div>${directHasHazard ? '<span class="text-danger small fw-bold">⚠️ Crosses hazard buffer</span>' : ''}`;
+          const safeTravelMode = GuardedBerm.escapeHtml(travelMode);
+          const travelWarning = directHasHazard && travelMode !== 'Car'
+            ? `<div class="text-danger small fw-bold mt-1">Extra caution: ${safeTravelMode.toLowerCase()} travel has greater exposure near reported hazards.</div>`
+            : '';
+          let html = `<div class="border p-3"><div class="card-kicker mb-2">Route comparison · ${safeTravelMode}</div><strong>Fastest Route</strong><div class="small text-muted">${(directRoute.distance / 1000).toFixed(1)} km · ${Math.round(directRoute.duration / 60)} min</div>${directHasHazard ? '<span class="text-danger small fw-bold">⚠️ Crosses hazard buffer</span>' : ''}${travelWarning}`;
           if (safeRoute) html += `<hr class="my-2"><strong class="text-success">Safe Detour</strong><div class="small text-muted">${(safeRoute.distance / 1000).toFixed(1)} km · ${Math.round(safeRoute.duration / 60)} min</div>`;
           html += `<div class="mt-2"><strong>Risk Score:</strong> ${Math.round(riskScore)} / 100</div></div>`;
-          document.getElementById('route-result').innerHTML = html;
+          GuardedBerm.setHtml('route-result', html);
         } catch (e) {
-          document.getElementById('route-status').textContent = 'Route unavailable.';
+          GuardedBerm.setText('route-status', 'Route unavailable.');
           GuardedBerm.showToast(e.message, 'danger');
         } finally {
           GuardedBerm.setLoading(btn, false);
@@ -147,7 +184,7 @@
           setMarker('start', start.lat, start.lon);
           setMarker('destination', dest.lat, dest.lon);
           await calculateRoute(start, dest);
-        } catch (err) { GuardedBerm.showToast(err.message, 'danger'); }
+        } catch (err) { if (err.name !== 'AbortError') GuardedBerm.showToast(err.message, 'danger'); }
       });
 
       document.getElementById('set-start').addEventListener('click', () => { selectingMode = 'start'; });
@@ -159,23 +196,26 @@
         setMarker(selectingMode, lat, lng);
         try {
           const address = await GuardedBerm.reverseGeocode(lat, lng);
-          document.getElementById(selectingMode === 'start' ? 'start' : 'destination').value = address;
+          GuardedBerm.setValueForElement(selectingMode === 'start' ? 'start' : 'destination', address);
           checkRoute();
-        } catch (err) { console.error(err); }
+        } catch (err) { if (err.name !== 'AbortError') console.error(err); }
         selectingMode = null;
       });
 
       document.getElementById('use-home').addEventListener('click', () => {
-        document.getElementById('start').value = `${home.lat}, ${home.lon}`;
+        GuardedBerm.setValueForElement('start', `${home.lat}, ${home.lon}`);
         setMarker('start', home.lat, home.lon);
         map.setView([home.lat, home.lon], 13);
       });
+      document.querySelectorAll('.route-preference').forEach(input => input.addEventListener('change', () => {
+        if (startPt && destPt) checkRoute();
+      }));
 
       document.getElementById('live-location').addEventListener('click', () => {
         navigator.geolocation.getCurrentPosition(pos => {
           const { latitude, longitude } = pos.coords;
           setMarker('start', latitude, longitude);
-          document.getElementById('start').value = `${latitude}, ${longitude}`;
+          GuardedBerm.setValueForElement('start', `${latitude}, ${longitude}`);
           map.setView([latitude, longitude], 15);
         }, () => GuardedBerm.showToast('GPS access denied.', 'danger'));
       });

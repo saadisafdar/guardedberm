@@ -6,6 +6,7 @@
   <title>Profile | GuardedBerm</title>
   <link rel="icon" href="logo.png" type="image/png">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,18 +21,32 @@
         <li><a class="nav-link" href="feed.html">Hazard Feed</a></li>
         <li><a class="nav-link" href="alerts.html">Alerts</a></li>
         <li><a class="nav-link active" href="profile.html">Profile</a></li>
+        <li class="ms-lg-2"><button class="btn btn-sm btn-outline-navy logout-btn" type="button">Logout</button></li>
       </ul>
     </div>
   </nav>
 
-  <main class="container page-shell" style="max-width:980px">
+  <main class="page-shell px-3 px-lg-4">
     <div class="page-header mb-4">
       <p class="card-kicker mb-1">Account controls</p>
       <h1 class="h2 fw-bold mb-0">Profile &amp; geofence settings</h1>
     </div>
-
+    <section class="card-sharp p-4 p-lg-5 mb-4">
+      <div class="d-flex flex-column flex-md-row align-items-md-center gap-3">
+        <div id="profile-avatar" class="profile-avatar" aria-hidden="true">GB</div>
+        <div class="flex-grow-1">
+          <div class="d-flex flex-wrap align-items-center gap-2"><h2 id="identity-name" class="h4 fw-bold mb-0">Community Responder</h2><span class="badge badge-verified">Verified Responder</span></div>
+          <div id="identity-email" class="text-muted mt-1">No email on file</div>
+        </div>
+        <div class="profile-stats">
+          <div><strong id="stat-reports">0</strong><small>Reports submitted</small></div>
+          <div><strong id="stat-upvotes">0</strong><small>Community upvotes</small></div>
+          <div><strong id="stat-radius">5 km</strong><small>Active geofence</small></div>
+        </div>
+      </div>
+    </section>
     <div class="row g-4">
-      <section class="col-12 col-md-6">
+      <section class="col-12 col-lg-5">
         <div class="card-sharp p-4 h-100">
           <h2 class="h5 fw-bold mb-3">Account profile</h2>
           <form id="profile-form">
@@ -44,10 +59,36 @@
           </form>
         </div>
       </section>
-      <section class="col-12 col-md-6">
+      <section class="col-12 col-lg-5">
+        <div class="card-sharp p-4 h-100">
+          <div class="card-kicker mb-1">Account security</div>
+          <h2 class="h5 fw-bold mb-3">Change Password</h2>
+          <form id="password-form" novalidate>
+            <label class="form-label fw-semibold" for="current-password">Current Password</label>
+            <div class="input-group mb-3">
+              <input id="current-password" class="form-control" type="password" autocomplete="current-password" required>
+              <button class="password-toggle" type="button" data-password-target="current-password" aria-label="Show current password">Show</button>
+            </div>
+            <label class="form-label fw-semibold" for="new-password">New Password</label>
+            <div class="input-group mb-3">
+              <input id="new-password" class="form-control" type="password" minlength="6" autocomplete="new-password" required>
+              <button class="password-toggle" type="button" data-password-target="new-password" aria-label="Show new password">Show</button>
+            </div>
+            <label class="form-label fw-semibold" for="confirm-password">Confirm New Password</label>
+            <div class="input-group mb-3">
+              <input id="confirm-password" class="form-control" type="password" minlength="6" autocomplete="new-password" required>
+              <button class="password-toggle" type="button" data-password-target="confirm-password" aria-label="Show confirmation password">Show</button>
+            </div>
+            <button class="btn btn-accent w-100" type="submit">Update Password</button>
+            <div id="password-status" class="alert mt-3 mb-0 d-none" role="status" aria-live="polite"></div>
+          </form>
+        </div>
+      </section>
+      <section class="col-12 col-lg-7">
         <div class="card-sharp p-4 h-100">
           <h2 class="h5 fw-bold mb-3">Saved Home Coordinates</h2>
-          <p class="text-muted small">Used for 5 km Haversine proximity calculations.</p>
+          <p class="text-muted small">Click the map or drag the marker to set your home geofence center.</p>
+          <div class="profile-map mb-3"><div id="home-map"></div></div>
           <form id="coords-form">
             <label class="form-label fw-semibold" for="latitude">Home latitude</label>
             <input id="latitude" class="form-control mb-3" type="number" step="any" required>
@@ -58,39 +99,192 @@
           </form>
         </div>
       </section>
+      <section class="col-12">
+        <div class="card-sharp p-4">
+          <div class="card-kicker">Personal navigation</div>
+          <h2 class="h5 fw-bold mt-1 mb-3">Saved locations &amp; travel mode</h2>
+          <form id="travel-form" class="row g-3 align-items-end">
+            <div class="col-12 col-md-4"><label class="form-label fw-semibold" for="secondary-name">Location name</label><input id="secondary-name" class="form-control" placeholder="Campus or workplace"></div>
+            <div class="col-6 col-md-3"><label class="form-label fw-semibold" for="secondary-lat">Latitude</label><input id="secondary-lat" class="form-control" type="number" step="any" placeholder="33.6844"></div>
+            <div class="col-6 col-md-3"><label class="form-label fw-semibold" for="secondary-lon">Longitude</label><input id="secondary-lon" class="form-control" type="number" step="any" placeholder="73.0479"></div>
+            <div class="col-12 col-md-2"><button class="btn btn-outline-navy w-100" type="button" id="use-map-location">Use home pin</button></div>
+            <div class="col-12 col-md-6"><label class="form-label fw-semibold" for="travel-mode">Primary travel mode</label><select id="travel-mode" class="form-select"><option>Car</option><option>Motorcycle</option><option>Pedestrian</option></select></div>
+            <div class="col-12 col-md-6"><button class="btn btn-accent w-100" type="submit">Save location &amp; travel mode</button></div>
+          </form>
+          <p id="travel-status" class="text-success fw-semibold mt-3 mb-0"></p>
+          <div id="secondary-summary" class="small text-muted mt-3">No secondary location saved.</div>
+        </div>
+      </section>
     </div>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>
+  <script src="map.js"></script>
   <script>
+    (async function () {
     const coords = GuardedBerm.getCoords();
-    document.getElementById('latitude').value = coords.lat;
-    document.getElementById('longitude').value = coords.lon;
-    const profile = JSON.parse(localStorage.getItem('guardedberm_profile') || '{}');
-    if (profile.name) document.getElementById('name').value = profile.name;
-    if (profile.email) document.getElementById('email').value = profile.email;
+    let profile = GuardedBerm.getJson('guardedberm_profile', {}) || {};
+    const ownerId = GuardedBerm.getOwnerId();
+    const ownerReports = GuardedBerm.getReports().filter(report => report.ownerId === ownerId);
+    const name = profile.name || 'Community Responder';
+    const email = profile.email || '';
+    GuardedBerm.setValueForElement('name', profile.name || '');
+    GuardedBerm.setValueForElement('email', profile.email || '');
+    GuardedBerm.setText('identity-name', name);
+    GuardedBerm.setText('identity-email', email || 'No email on file');
+    GuardedBerm.setText('profile-avatar', (name.match(/\b\w/g) || ['G', 'B']).slice(0, 2).join('').toUpperCase());
+    GuardedBerm.setText('stat-reports', ownerReports.length);
+    GuardedBerm.setText('stat-upvotes', ownerReports.reduce((sum, report) => sum + (Number(report.upvotes) || 0), 0));
+    GuardedBerm.setText('stat-radius', `${Number(GuardedBerm.getValue('guardedberm_geofence_radius')) || 5} km`);
+    GuardedBerm.setValueForElement('latitude', coords.lat.toFixed(5));
+    GuardedBerm.setValueForElement('longitude', coords.lon.toFixed(5));
 
-    document.getElementById('profile-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      localStorage.setItem('guardedberm_profile', JSON.stringify({
-        name: document.getElementById('name').value.trim(),
-        email: document.getElementById('email').value.trim()
-      }));
-      document.getElementById('profile-status').textContent = 'Profile changes saved.';
-      setTimeout(() => document.getElementById('profile-status').textContent = '', 3000);
-    });
-
+    const homeMap = await MapKit.getMap('home-map', { center: [coords.lat, coords.lon], zoom: 13 });
+    if (!homeMap) return;
+    const homeMarker = L.marker([coords.lat, coords.lon], { draggable: true }).addTo(homeMap);
+    function updateHome(lat, lon, save = true) {
+      GuardedBerm.setValueForElement('latitude', lat.toFixed(5));
+      GuardedBerm.setValueForElement('longitude', lon.toFixed(5));
+      homeMarker.setLatLng([lat, lon]);
+      if (save) {
+        try {
+          GuardedBerm.saveCoords(lat, lon);
+          GuardedBerm.setText('location-status', 'Home pin saved.');
+        } catch (error) { GuardedBerm.showToast(error.message, 'danger'); }
+      }
+    }
+    homeMap.on('click', event => updateHome(event.latlng.lat, event.latlng.lng));
+    homeMarker.on('dragend', () => { const position = homeMarker.getLatLng(); updateHome(position.lat, position.lng); });
     document.getElementById('coords-form').addEventListener('submit', (e) => {
       e.preventDefault();
       try {
-        GuardedBerm.saveCoords(document.getElementById('latitude').value, document.getElementById('longitude').value);
-        document.getElementById('location-status').textContent = 'Geofence coordinates updated.';
-        setTimeout(() => document.getElementById('location-status').textContent = '', 3000);
+        const saved = GuardedBerm.saveCoords(document.getElementById('latitude').value, document.getElementById('longitude').value);
+        updateHome(saved.lat, saved.lon, false);
+        GuardedBerm.setText('location-status', 'Geofence coordinates updated.');
+      } catch (error) { GuardedBerm.showToast(error.message, 'danger'); }
+    });
+    document.querySelectorAll('#latitude, #longitude').forEach(input => input.addEventListener('change', () => {
+      const lat = Number(document.getElementById('latitude').value);
+      const lon = Number(document.getElementById('longitude').value);
+      if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+        GuardedBerm.setValueForElement('latitude', lat.toFixed(5));
+        GuardedBerm.setValueForElement('longitude', lon.toFixed(5));
+        homeMarker.setLatLng([lat, lon]);
+        homeMap.setView([lat, lon], 13);
+      }
+    }));
+
+    const secondary = GuardedBerm.getJson('guardedberm_secondary_location', null);
+    if (secondary) {
+      GuardedBerm.setValueForElement('secondary-name', secondary.name || '');
+      GuardedBerm.setValueForElement('secondary-lat', Number(secondary.lat).toFixed(5));
+      GuardedBerm.setValueForElement('secondary-lon', Number(secondary.lon).toFixed(5));
+      GuardedBerm.setText('secondary-summary', `${secondary.name || 'Secondary location'} · ${Number(secondary.lat).toFixed(5)}, ${Number(secondary.lon).toFixed(5)}`);
+    }
+    GuardedBerm.setValueForElement('travel-mode', GuardedBerm.getValue('guardedberm_travel_mode') || 'Car');
+    document.getElementById('use-map-location').addEventListener('click', () => {
+      GuardedBerm.setValueForElement('secondary-lat', Number(document.getElementById('latitude').value).toFixed(5));
+      GuardedBerm.setValueForElement('secondary-lon', Number(document.getElementById('longitude').value).toFixed(5));
+    });
+    document.getElementById('travel-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const latValue = document.getElementById('secondary-lat').value;
+      const lonValue = document.getElementById('secondary-lon').value;
+      if (latValue || lonValue) {
+        const lat = Number(latValue);
+        const lon = Number(lonValue);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+          GuardedBerm.showToast('Enter valid coordinates for the secondary location.', 'danger');
+          return;
+        }
+        const location = { name: document.getElementById('secondary-name').value.trim() || 'Saved location', lat, lon };
+        if (!GuardedBerm.setJson('guardedberm_secondary_location', location)) {
+          GuardedBerm.showToast('Unable to save the secondary location.', 'danger');
+          return;
+        }
+        GuardedBerm.setText('secondary-summary', `${location.name} · ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+      }
+      if (!GuardedBerm.setValue('guardedberm_travel_mode', document.getElementById('travel-mode').value)) {
+        GuardedBerm.showToast('Unable to save travel preferences.', 'danger');
+        return;
+      }
+      GuardedBerm.setText('travel-status', 'Travel preferences saved.');
+    });
+
+    document.getElementById('profile-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const updatedProfile = {
+        name: document.getElementById('name').value.trim(),
+        email: document.getElementById('email').value.trim()
+      };
+      if (!GuardedBerm.setJson('guardedberm_profile', updatedProfile)) {
+        GuardedBerm.showToast('Unable to save profile changes.', 'danger');
+        return;
+      }
+      const users = GuardedBerm.getJson('guardedberm_users', []);
+      const userList = Array.isArray(users) ? users : [];
+      const user = userList.find(item => item.email === profile.email);
+      if (user) {
+        user.name = updatedProfile.name;
+        user.email = updatedProfile.email;
+        if (!GuardedBerm.setJson('guardedberm_users', userList)) {
+          GuardedBerm.showToast('Profile saved, but account details could not be updated.', 'warning');
+        }
+      }
+      profile = updatedProfile;
+      GuardedBerm.setText('identity-name', updatedProfile.name);
+      GuardedBerm.setText('identity-email', updatedProfile.email);
+      GuardedBerm.setText('profile-avatar', (updatedProfile.name.match(/\b\w/g) || ['G', 'B']).slice(0, 2).join('').toUpperCase());
+      GuardedBerm.setText('profile-status', 'Profile changes saved.');
+      setTimeout(() => GuardedBerm.setText('profile-status', ''), 3000);
+    });
+
+    document.querySelectorAll('.password-toggle').forEach(button => button.addEventListener('click', () => {
+      const input = document.getElementById(button.dataset.passwordTarget);
+      if (!input) return;
+      const reveal = input.type === 'password';
+      input.type = reveal ? 'text' : 'password';
+      button.textContent = reveal ? 'Hide' : 'Show';
+      button.setAttribute('aria-label', `${reveal ? 'Hide' : 'Show'} ${button.dataset.passwordTarget.replaceAll('-', ' ')}`);
+    }));
+
+    document.getElementById('password-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const current = document.getElementById('current-password').value;
+      const next = document.getElementById('new-password').value;
+      const confirmation = document.getElementById('confirm-password').value;
+      const showStatus = (message, type) => {
+        GuardedBerm.setClassName('password-status', `alert alert-${type} mt-3 mb-0`);
+        GuardedBerm.setText('password-status', message);
+      };
+      if (next.length < 6) return showStatus('New password must be at least 6 characters.', 'danger');
+      if (next !== confirmation) return showStatus('New password and confirmation do not match.', 'danger');
+
+      try {
+        const users = GuardedBerm.getJson('guardedberm_users', []);
+        const userList = Array.isArray(users) ? users : [];
+        const user = userList.find(item => item.email === profile.email);
+        if (!user || !user.passwordSalt || !user.passwordHash) {
+          return showStatus('No saved password is associated with this account. Sign in again to initialize account security.', 'danger');
+        }
+        const currentHash = await GuardedBerm.hashPassword(current, user.passwordSalt);
+        if (currentHash !== user.passwordHash) return showStatus('Current password is incorrect.', 'danger');
+        user.passwordSalt = GuardedBerm.createPasswordSalt();
+        user.passwordHash = await GuardedBerm.hashPassword(next, user.passwordSalt);
+        if (!GuardedBerm.setJson('guardedberm_users', userList)) {
+          return showStatus('Password could not be saved in this browser.', 'danger');
+        }
+        event.target.reset();
+        document.querySelectorAll('.password-toggle').forEach(button => { button.textContent = 'Show'; });
+        showStatus('Password updated successfully.', 'success');
       } catch (error) {
-        GuardedBerm.showToast(error.message, 'danger');
+        console.error('Unable to update password.', error);
+        showStatus(error.message || 'Password could not be updated.', 'danger');
       }
     });
+    })();
   </script>
 </body>
 </html>

@@ -23,6 +23,7 @@
         <li><a class="nav-link" href="feed.html">Hazard Feed</a></li>
         <li><a class="nav-link" href="alerts.html">Alerts</a></li>
         <li><a class="nav-link" href="profile.html">Profile</a></li>
+        <li class="ms-lg-2"><button class="btn btn-sm btn-outline-navy logout-btn" type="button">Logout</button></li>
       </ul>
     </div>
   </nav>
@@ -79,7 +80,6 @@
         <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
           <input id="location-search" class="form-control form-control-sm flex-grow-1" style="max-width: 24rem" placeholder="Search a city or area">
           <button id="location-search-button" class="btn btn-accent btn-sm" type="button">Search</button>
-          <button id="dashboard-gps" class="btn btn-outline-navy btn-sm" type="button">Use My GPS</button>
           <span class="badge text-bg-light border">Click map to inspect</span>
         </div>
         <div id="map-location-status" class="small text-muted mb-2">Selected coordinates: 33.7833, 72.7167</div>
@@ -91,7 +91,16 @@
             <h2 class="h5 fw-bold mb-0">Community reports</h2>
             <a class="small text-accent text-decoration-none" href="feed.html">View all</a>
           </div>
+          <label class="form-label small fw-semibold mb-2" for="recent-severity-filter">Filter by severity</label>
+          <select id="recent-severity-filter" class="form-select form-select-sm mb-2">
+            <option value="">All severity levels</option>
+            <option>Critical</option>
+            <option>High</option>
+            <option>Moderate</option>
+            <option>Low</option>
+          </select>
           <div id="recent-reports" class="list-group list-group-flush"></div>
+          <a class="btn btn-accent w-100 mt-3" href="report.html">Report New Hazard</a>
         </div>
       </aside>
     </div>
@@ -117,6 +126,28 @@
         { 'Hazards': hazardLayer, 'Seismic': seismicLayer, 'Weather': weatherLayer }
       ).addTo(map);
 
+      function renderRecentReports(lat, lng) {
+        const severityFilter = document.getElementById('recent-severity-filter').value;
+        const nearbyReports = GuardedBerm.getReports().filter(r => GuardedBerm.haversineDistance(lat, lng, r.lat, r.lon) <= 5);
+        const reports = nearbyReports.filter(r => !severityFilter || (r.severity || 'Moderate') === severityFilter);
+        GuardedBerm.setText('hazard-count', `${nearbyReports.filter(r => r.status === 'Verified').length} Active`);
+        if (reports.length === 0) {
+          GuardedBerm.setHtml('recent-reports', '<div class="text-muted py-4 text-center">No reports match this filter near the selected location.</div>');
+          return nearbyReports;
+        }
+        GuardedBerm.setHtml('recent-reports', reports.slice(0, 5).map(r => `
+          <div class="list-group-item px-0 py-3">
+            <div class="d-flex justify-content-between">
+              <span class="badge ${r.status === 'Verified' ? 'badge-verified' : 'badge-unverified'}">${GuardedBerm.escapeHtml(r.category.toUpperCase())}</span>
+              <small class="text-muted">${GuardedBerm.haversineDistance(lat, lng, r.lat, r.lon).toFixed(1)} km</small>
+            </div>
+            <strong class="d-block mt-2">${GuardedBerm.escapeHtml(r.severity || 'Moderate')} · ${GuardedBerm.escapeHtml(r.status)}</strong>
+            <small class="text-muted">${GuardedBerm.escapeHtml(r.description)}</small>
+          </div>
+        `).join(''));
+        return nearbyReports;
+      }
+
       async function updateDashboard(lat, lng) {
         const reqId = ++currentRequest;
         selectedPin.setLatLng([lat, lng]);
@@ -125,67 +156,54 @@
 
         GuardedBerm.reverseGeocode(lat, lng).then(name => {
           if (reqId !== currentRequest) return;
-          document.getElementById('selected-area').textContent = `Selected area: ${name}`;
-          document.getElementById('map-location-status').textContent = `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)} · ${name}`;
-          selectedPin.bindPopup(`<strong>${name}</strong>`).openPopup();
+          GuardedBerm.setText('selected-area', `Selected area: ${name}`);
+          GuardedBerm.setText('map-location-status', `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)} · ${name}`);
+          selectedPin.bindPopup(`<strong>${GuardedBerm.escapeHtml(name)}</strong>`).openPopup();
+        }).catch(error => {
+          if (error.name !== 'AbortError') console.error('Reverse geocoding failed.', error);
         });
 
-        const reports = GuardedBerm.getReports().filter(r => GuardedBerm.haversineDistance(lat, lng, r.lat, r.lon) <= 5);
-        document.getElementById('hazard-count').textContent = `${reports.filter(r => r.status === 'Verified').length} Active`;
-
-        const feed = document.getElementById('recent-reports');
-        if (reports.length === 0) {
-          feed.innerHTML = '<div class="text-muted py-4 text-center">No reports near this location.</div>';
-        } else {
-          feed.innerHTML = reports.slice(0, 5).map(r => `
-            <div class="list-group-item px-0 py-3">
-              <div class="d-flex justify-content-between">
-                <span class="badge ${r.status === 'Verified' ? 'badge-risk-critical' : 'badge-risk-moderate'}">${r.category.toUpperCase()}</span>
-                <small class="text-muted">${GuardedBerm.haversineDistance(lat, lng, r.lat, r.lon).toFixed(1)} km</small>
-              </div>
-              <strong class="d-block mt-2">${r.status}</strong>
-              <small class="text-muted">${r.description}</small>
-            </div>
-          `).join('');
-        }
+        const reports = renderRecentReports(lat, lng);
 
         hazardLayer.clearLayers();
         reports.forEach(r => L.circleMarker([r.lat, r.lon], {
           color: r.status === 'Verified' ? '#C62828' : '#D99A00', radius: 7
-        }).bindPopup(r.category).addTo(hazardLayer));
+        }).bindPopup(GuardedBerm.escapeHtml(r.category)).addTo(hazardLayer));
 
         let precip = 0, quakes = [];
         try {
           const wData = await GuardedBerm.fetchWeather(lat, lng);
           if (reqId !== currentRequest) return;
           precip = wData.current.precipitation || 0;
-          document.getElementById('weather-value').textContent = `${wData.current.temperature_2m}°C`;
-          document.getElementById('weather-details').textContent = `Rain: ${precip} mm/h`;
+          GuardedBerm.setText('weather-value', `${wData.current.temperature_2m}°C`);
+          GuardedBerm.setText('weather-details', `Rain: ${precip} mm/h`);
           weatherLayer.clearLayers();
           if (precip > 0) L.circle([lat, lng], { color: '#5E9B9A', radius: precip * 1000 }).addTo(weatherLayer);
-        } catch (e) { document.getElementById('weather-value').textContent = 'Error'; }
+        } catch (e) { GuardedBerm.setText('weather-value', 'Error'); }
 
         try {
           const qData = await GuardedBerm.fetchEarthquakes(lat, lng);
           if (reqId !== currentRequest) return;
-          quakes = qData.features || [];
+          quakes = (qData.features || []).slice(0, 10);
           const topQuake = quakes[0];
-          document.getElementById('seismic-value').textContent = topQuake ? `M ${topQuake.properties.mag.toFixed(1)}` : 'None';
-          document.getElementById('seismic-location').textContent = topQuake ? topQuake.properties.place : 'No recent activity';
+          GuardedBerm.setText('seismic-value', topQuake ? `M ${topQuake.properties.mag.toFixed(1)}` : 'None');
+          GuardedBerm.setText('seismic-location', topQuake ? topQuake.properties.place : 'No recent activity');
           seismicLayer.clearLayers();
           quakes.forEach(q => {
             const [qLon, qLat] = q.geometry.coordinates;
             L.circleMarker([qLat, qLon], { color: '#C62828', radius: q.properties.mag * 2 }).bindPopup(`M ${q.properties.mag}`).addTo(seismicLayer);
           });
-        } catch (e) { document.getElementById('seismic-value').textContent = 'Error'; }
+        } catch (e) { GuardedBerm.setText('seismic-value', 'Error'); }
 
         if (reqId !== currentRequest) return;
 
         const score = GuardedBerm.calculateRiskScore(lat, lng, precip, quakes);
-        document.getElementById('risk-value').textContent = `${Math.round(score)} / 100`;
+        GuardedBerm.setText('risk-value', `${Math.round(score)} / 100`);
         const badge = document.getElementById('risk-badge');
-        badge.textContent = score >= 70 ? 'HIGH RISK' : score >= 40 ? 'MODERATE RISK' : 'LOW RISK';
-        badge.className = `badge mt-2 ${score >= 70 ? 'badge-risk-high' : score >= 40 ? 'badge-risk-moderate' : 'badge-risk-low'}`;
+        if (badge) {
+          badge.textContent = score >= 70 ? 'HIGH RISK' : score >= 40 ? 'MODERATE RISK' : 'LOW RISK';
+          badge.className = `badge mt-2 ${score >= 70 ? 'badge-risk-high' : score >= 40 ? 'badge-risk-moderate' : 'badge-risk-low'}`;
+        }
       }
 
       map.on('click', e => updateDashboard(e.latlng.lat, e.latlng.lng));
@@ -200,16 +218,18 @@
         try {
           const res = await GuardedBerm.geocodeAddress(query);
           updateDashboard(res.lat, res.lon);
-        } catch (e) { GuardedBerm.showToast('Location not found.', 'danger'); }
+        } catch (e) { if (e.name !== 'AbortError') GuardedBerm.showToast('Location not found.', 'danger'); }
       });
 
-      ['dashboard-gps', 'live-location'].forEach(id => {
-        document.getElementById(id).addEventListener('click', () => {
+      document.getElementById('live-location').addEventListener('click', () => {
           navigator.geolocation.getCurrentPosition(
             pos => updateDashboard(pos.coords.latitude, pos.coords.longitude),
             () => GuardedBerm.showToast('Unable to access GPS.', 'danger')
           );
-        });
+      });
+      document.getElementById('recent-severity-filter').addEventListener('change', () => {
+        const selected = selectedPin.getLatLng();
+        renderRecentReports(selected.lat, selected.lng);
       });
 
       document.getElementById('weather-layer-toggle').addEventListener('change', e => {
@@ -221,7 +241,12 @@
         updateDashboard(c.lat, c.lon);
       });
 
-      updateDashboard(33.7833, 72.7167);
+      const params = new URLSearchParams(window.location.search);
+      const queryLat = Number(params.get('lat'));
+      const queryLon = Number(params.get('lon'));
+      const hasQueryCoords = params.has('lat') && params.has('lon') &&
+        Number.isFinite(queryLat) && Number.isFinite(queryLon) && Math.abs(queryLat) <= 90 && Math.abs(queryLon) <= 180;
+      updateDashboard(hasQueryCoords ? queryLat : 33.7833, hasQueryCoords ? queryLon : 72.7167);
     })();
   </script>
 </body>

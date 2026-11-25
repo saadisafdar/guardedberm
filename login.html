@@ -32,7 +32,7 @@
           </div>
 
           <div id="login-section" class="form-section active">
-            <form action="dashboard.html">
+            <form id="login-form">
               <div class="mb-3">
                 <label class="form-label fw-semibold" for="login-email">Email Address</label>
                 <input type="email" id="login-email" class="form-control py-2 px-3" required placeholder="name@example.com">
@@ -48,6 +48,7 @@
                 </div>
               </div>
               <button type="submit" class="btn btn-accent w-100 py-3">Access Dashboard</button>
+              <p id="login-msg" class="small text-danger mt-2 mb-0" role="alert"></p>
             </form>
           </div>
 
@@ -93,26 +94,76 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="app.js"></script>
   <script>
     function switchTab(tab) {
-      document.getElementById('login-section').classList.toggle('active', tab === 'login');
-      document.getElementById('signup-section').classList.toggle('active', tab === 'signup');
+      GuardedBerm.toggleClass('login-section', 'active', tab === 'login');
+      GuardedBerm.toggleClass('signup-section', 'active', tab === 'signup');
       document.querySelectorAll('.tab-btn')[0].classList.toggle('active', tab === 'login');
       document.querySelectorAll('.tab-btn')[1].classList.toggle('active', tab === 'signup');
     }
     function togglePassword(inputId, btn) {
       const input = document.getElementById(inputId);
+      if (!input || !btn) return;
       const show = input.type === 'password';
       input.type = show ? 'text' : 'password';
       btn.classList.toggle('is-visible', show);
       btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
     }
+    async function startSession(name, email, password, messageElement) {
+      const setMessage = message => { if (messageElement) messageElement.textContent = message; };
+      try {
+        const users = GuardedBerm.getJson('guardedberm_users', []);
+        const userList = Array.isArray(users) ? users : [];
+        let user = userList.find(item => item.email === email);
+        if (user) {
+          const enteredHash = await GuardedBerm.hashPassword(password, user.passwordSalt);
+          if (enteredHash !== user.passwordHash) {
+            setMessage('The password does not match this saved account.');
+            return;
+          }
+        } else {
+          const passwordSalt = GuardedBerm.createPasswordSalt();
+          user = { name, email, passwordSalt, passwordHash: await GuardedBerm.hashPassword(password, passwordSalt) };
+          userList.push(user);
+          if (!GuardedBerm.setJson('guardedberm_users', userList)) {
+            setMessage('Unable to save account details in this browser.');
+            return;
+          }
+        }
+        const profile = { name: user.name || name, email };
+        if (!GuardedBerm.setValue('guardedberm_session_active', 'true') ||
+          !GuardedBerm.setJson('guardedberm_profile', profile)) {
+          setMessage('Unable to start a session in this browser.');
+          return;
+        }
+        window.location.href = 'dashboard.html';
+      } catch (error) {
+        console.error('Unable to start account session.', error);
+        setMessage(error.message || 'Unable to start a session.');
+      }
+    }
+    document.getElementById('login-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim();
+      const profile = GuardedBerm.getJson('guardedberm_profile', {}) || {};
+      startSession(profile.name || email.split('@')[0], email, document.getElementById('login-pass').value, document.getElementById('login-msg'));
+    });
     document.getElementById('signup-form').addEventListener('submit', function(e) {
+      e.preventDefault();
       const pass = document.getElementById('signup-pass').value;
       const confirm = document.getElementById('signup-confirm').value;
       const msg = document.getElementById('signup-msg');
       if (pass !== confirm) { e.preventDefault(); msg.textContent = 'Passwords do not match.'; }
-      else { msg.textContent = ''; }
+      else {
+        msg.textContent = '';
+        startSession(
+          document.getElementById('signup-name').value.trim(),
+          document.getElementById('signup-email').value.trim(),
+          pass,
+          msg
+        );
+      }
     });
   </script>
 </body>

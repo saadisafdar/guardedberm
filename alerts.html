@@ -20,57 +20,142 @@
         <li><a class="nav-link" href="feed.html">Hazard Feed</a></li>
         <li><a class="nav-link active" href="alerts.html">Alerts</a></li>
         <li><a class="nav-link" href="profile.html">Profile</a></li>
+        <li class="ms-lg-2"><button class="btn btn-sm btn-outline-navy logout-btn" type="button">Logout</button></li>
       </ul>
     </div>
   </nav>
 
-  <main class="container page-shell" style="max-width:900px">
+  <main class="page-shell px-3 px-lg-4">
     <div class="page-header mb-4">
-      <p class="card-kicker mb-1">Proximity intelligence</p>
-      <h1 class="h2 fw-bold mb-0">Your alerts</h1>
+      <p class="card-kicker mb-1">Proximity &amp; early warning center</p>
+      <h1 class="h2 fw-bold mb-0">Local alerts &amp; monitoring</h1>
     </div>
-
-    <div class="alert-banner p-4 mb-4 d-flex flex-column flex-sm-row justify-content-between gap-3 align-items-sm-center">
-      <div>
-        <h2 class="h6 text-accent fw-bold mb-1">5 KM GEOFENCE MONITORING ACTIVE</h2>
-        <p id="weather-summary" class="small text-white-50 mb-0">Loading live conditions...</p>
-      </div>
-      <span class="badge badge-risk-low px-3 py-2">LIVE</span>
+    <div class="row g-4">
+      <aside class="col-12 col-lg-4">
+        <div class="card-sharp p-4 mb-4">
+          <div class="card-kicker">Monitoring controls</div>
+          <h2 class="h5 fw-bold mt-1">Geofence radius</h2>
+          <div class="d-flex justify-content-between small text-muted"><span>1 km</span><strong id="radius-value" class="text-accent">5 km</strong><span>25 km</span></div>
+          <input id="radius-slider" class="form-range mt-2 mb-3" type="range" min="1" max="25" value="5" aria-label="Monitoring radius">
+          <hr>
+          <h3 class="h6 fw-bold">Alert categories</h3>
+          <div class="form-check form-switch mb-2"><input id="toggle-floods" class="form-check-input alert-toggle" type="checkbox" checked><label class="form-check-label" for="toggle-floods">Flash Flood Warnings</label></div>
+          <div class="form-check form-switch mb-2"><input id="toggle-seismic" class="form-check-input alert-toggle" type="checkbox" checked><label class="form-check-label" for="toggle-seismic">USGS Seismic Alerts (M 3.0+)</label></div>
+          <div class="form-check form-switch"><input id="toggle-community" class="form-check-input alert-toggle" type="checkbox" checked><label class="form-check-label" for="toggle-community">Community Proximity Alerts</label></div>
+        </div>
+        <div class="card-sharp p-4">
+          <div class="card-kicker">Emergency quick response</div>
+          <h2 class="h5 fw-bold mt-1 mb-3">Help when it matters</h2>
+          <div class="border-top py-3 d-flex justify-content-between align-items-center"><div><strong>Rescue 1122</strong><div class="small text-muted">Emergency rescue &amp; ambulance</div></div><a class="btn btn-accent btn-sm" href="tel:1122">Call 1122</a></div>
+          <div class="border-top py-3 d-flex justify-content-between align-items-center"><div><strong>NDMA Helpline</strong><div class="small text-muted">National disaster response · 1700</div></div><a class="btn btn-outline-navy btn-sm" href="tel:1700">Call 1700</a></div>
+          <div class="border-top pt-3"><strong>PDMA Control Room</strong><div class="small text-muted">Contact your provincial disaster authority.</div></div>
+        </div>
+      </aside>
+      <section class="col-12 col-lg-8">
+        <div class="alert-banner p-4 mb-3 d-flex flex-column flex-sm-row justify-content-between gap-3 align-items-sm-center">
+          <div><h2 class="h6 text-accent fw-bold mb-1">LIVE LOCAL MONITORING</h2><p id="weather-summary" class="small text-white-50 mb-0">Loading local conditions...</p></div>
+          <span class="badge badge-risk-low px-3 py-2">LIVE</span>
+        </div>
+        <div class="row g-3 mb-4">
+          <div class="col-12 col-md-6"><div class="card-sharp p-3 h-100"><div class="d-flex justify-content-between"><strong>Weather status</strong><span id="alert-weather-value" class="text-accent fw-bold">Loading...</span></div><small id="alert-weather-details" class="text-muted">Temperature · rainfall · wind</small></div></div>
+          <div class="col-12 col-md-6"><div class="card-sharp p-3 h-100"><div class="d-flex justify-content-between"><strong>Seismic status</strong><span id="alert-seismic-value" class="text-accent fw-bold">Loading...</span></div><small id="alert-seismic-details" class="text-muted">USGS last 24 hours</small></div></div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div><h2 class="h5 fw-bold mb-0">Active &amp; recent alerts</h2><small id="alert-count" class="text-muted">Nearby notifications</small></div>
+          <button id="refresh-alerts" class="btn btn-outline-navy btn-sm">Refresh live feeds</button>
+        </div>
+        <div id="alerts-list" class="d-grid gap-3"></div>
+      </section>
     </div>
-
-    <div class="card-sharp p-3 mb-4">
-      <div class="d-flex justify-content-between">
-        <strong>Current conditions</strong>
-        <span id="alert-weather-value" class="text-accent">Loading...</span>
-      </div>
-      <small id="alert-weather-details" class="text-muted">Temp · rain · wind</small>
-    </div>
-
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h2 class="h5 fw-bold mb-0">Notification history</h2>
-      <button id="refresh-alerts" class="btn btn-outline-navy btn-sm">Refresh live feeds</button>
-    </div>
-    <div id="alerts-list" class="d-grid gap-3"></div>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="app.js"></script>
   <script>
     const alertsList = document.getElementById('alerts-list');
+    const settingsKey = 'guardedberm_alert_settings';
+    const storedSettings = GuardedBerm.getJson(settingsKey, {});
+    const settings = storedSettings && typeof storedSettings === 'object' ? storedSettings : {};
+    const radiusSlider = document.getElementById('radius-slider');
+    const savedRadius = Number(GuardedBerm.getValue('guardedberm_geofence_radius')) || Number(settings.radius);
+    GuardedBerm.setValueForElement('radius-slider', Number.isFinite(savedRadius) ? Math.min(25, Math.max(1, savedRadius)) : 5);
+    ['floods', 'seismic', 'community'].forEach(key => {
+      GuardedBerm.setChecked(`toggle-${key}`, settings[key] !== false);
+    });
+
+    function currentSettings() {
+      return {
+        radius: Number(radiusSlider.value),
+        floods: document.getElementById('toggle-floods').checked,
+        seismic: document.getElementById('toggle-seismic').checked,
+        community: document.getElementById('toggle-community').checked
+      };
+    }
+
+    function saveSettings() {
+      const current = currentSettings();
+      if (!GuardedBerm.setJson(settingsKey, current) ||
+        !GuardedBerm.setValue('guardedberm_geofence_radius', current.radius)) {
+        GuardedBerm.showToast('Unable to save alert settings in this browser.', 'danger');
+      }
+      GuardedBerm.setText('radius-value', `${current.radius} km`);
+      renderAlerts();
+    }
+
+    function syncCommunityAlerts() {
+      const { community, radius } = currentSettings();
+      if (!community) return;
+      const home = GuardedBerm.getCoords();
+      GuardedBerm.getReports().forEach(report => {
+        const distance = GuardedBerm.haversineDistance(home.lat, home.lon, report.lat, report.lon);
+        if (distance <= radius) GuardedBerm.addAlert({
+          id: `community-${report.id}`, category: 'community', lat: report.lat, lon: report.lon,
+          severity: (report.severity || 'moderate').toLowerCase(), title: `${report.category} nearby`,
+          message: report.locationName ? `${report.locationName}: ${report.description}` : report.description
+        });
+      });
+    }
 
     function renderAlerts() {
-      const activeAlerts = GuardedBerm.getAlerts().filter(a => !a.dismissed);
-      alertsList.innerHTML = activeAlerts.length === 0
-        ? '<div class="card-sharp p-5 text-center text-muted">No active notifications.</div>'
-        : activeAlerts.map(a => `
-            <article class="card-sharp p-4 border-start border-4 ${a.severity === 'critical' ? 'border-danger' : 'border-warning'}">
+      syncCommunityAlerts();
+      const { radius, floods, seismic, community } = currentSettings();
+      const home = GuardedBerm.getCoords();
+      const activeAlerts = GuardedBerm.getAlerts().filter(alert => {
+        if (alert.dismissed) return false;
+        if (alert.category === 'flood' && !floods) return false;
+        if (alert.category === 'seismic' && !seismic) return false;
+        if (alert.category === 'community' && !community) return false;
+        if (Number.isFinite(alert.lat) && Number.isFinite(alert.lon) &&
+          GuardedBerm.haversineDistance(home.lat, home.lon, alert.lat, alert.lon) > radius) return false;
+        return true;
+      });
+      const historicalAlerts = GuardedBerm.getAlerts().filter(alert => alert.dismissed).slice(0, 3);
+      GuardedBerm.setText('alert-count', `${activeAlerts.length} active within ${radius} km`);
+      const activeMarkup = activeAlerts.length === 0
+        ? '<div class="card-sharp p-5 text-center"><div class="card-kicker mb-2">All clear nearby</div><strong>No active alerts within your selected radius.</strong><p class="small text-muted mb-0 mt-2">Keep monitoring enabled to receive local updates.</p></div>'
+        : activeAlerts.map(a => {
+          const distance = Number.isFinite(a.lat) && Number.isFinite(a.lon) ? GuardedBerm.haversineDistance(home.lat, home.lon, a.lat, a.lon) : null;
+          const severityClass = a.severity === 'critical' ? 'critical' : a.severity === 'high' ? 'high' : 'moderate';
+          const locationLink = Number.isFinite(a.lat) && Number.isFinite(a.lon) ? `dashboard.html?lat=${encodeURIComponent(a.lat)}&lon=${encodeURIComponent(a.lon)}` : 'dashboard.html';
+          return `
+            <article class="card-sharp p-4 alert-card alert-${severityClass}">
               <div class="d-flex justify-content-between gap-2">
-                <span class="badge ${a.severity === 'critical' ? 'badge-risk-critical' : 'badge-risk-moderate'}">${a.title}</span>
-                <button class="btn btn-sm btn-outline-secondary dismiss-btn" data-id="${a.id}">Dismiss</button>
+                <span class="badge ${severityClass === 'critical' ? 'badge-risk-critical' : severityClass === 'high' ? 'badge-risk-high' : 'badge-risk-moderate'}">${GuardedBerm.escapeHtml(a.title)}</span>
+                <button class="btn btn-sm btn-outline-secondary dismiss-btn" data-id="${GuardedBerm.escapeHtml(a.id)}">Dismiss</button>
               </div>
-              <h3 class="h6 fw-bold mt-3">${a.message}</h3>
-              <small class="text-muted">${new Date(a.createdAt).toLocaleString()}</small>
-            </article>`).join('');
+              <h3 class="h6 fw-bold mt-3">${GuardedBerm.escapeHtml(a.message)}</h3>
+              <div class="d-flex flex-wrap justify-content-between gap-2 mt-3 small text-muted">
+                <span>${distance === null ? 'Regional update' : `${distance.toFixed(1)} km from saved home`}</span>
+                <span>${new Date(a.createdAt).toLocaleString()}</span>
+              </div>
+              <a class="small text-accent fw-bold text-decoration-none d-inline-block mt-2" href="${locationLink}">Inspect on Map →</a>
+            </article>`;
+        }).join('');
+      const historyMarkup = historicalAlerts.length ? `
+        <div class="mt-3"><h3 class="h6 fw-bold">Recently dismissed</h3>
+          <div class="d-grid gap-2">${historicalAlerts.map(alert => `<div class="border p-3 bg-white d-flex justify-content-between gap-2"><span><strong>${GuardedBerm.escapeHtml(alert.title)}</strong><small class="d-block text-muted">${GuardedBerm.escapeHtml(alert.message)}</small></span><small class="text-muted text-nowrap">${new Date(alert.createdAt).toLocaleDateString()}</small></div>`).join('')}</div>
+        </div>` : '';
+      GuardedBerm.setHtml('alerts-list', activeMarkup + historyMarkup);
     }
 
     alertsList.addEventListener('click', (e) => {
@@ -82,37 +167,47 @@
 
     async function loadLiveFeeds() {
       const coords = GuardedBerm.getCoords();
+      const settings = currentSettings();
       try {
         const weather = await GuardedBerm.fetchWeather(coords.lat, coords.lon);
         const current = weather.current;
-        document.getElementById('alert-weather-value').textContent = `${current.temperature_2m}°C`;
-        document.getElementById('alert-weather-details').textContent = `Rain: ${current.precipitation} mm/h · Wind: ${current.wind_speed_10m} km/h`;
-        document.getElementById('weather-summary').textContent = `Live conditions at ${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)}`;
-        if (current.precipitation >= 5) {
-          GuardedBerm.addAlert({ id: `weather-${new Date().toISOString().slice(0, 13)}`, severity: 'critical', title: 'CRITICAL WEATHER', message: `Heavy precipitation: ${current.precipitation} mm/h.` });
-        } else if (current.precipitation > 0) {
-          GuardedBerm.addAlert({ id: `weather-${new Date().toISOString().slice(0, 13)}`, severity: 'moderate', title: 'WEATHER ADVISORY', message: `Rain detected: ${current.precipitation} mm/h.` });
+        GuardedBerm.setText('alert-weather-value', `${current.temperature_2m}°C`);
+        GuardedBerm.setText('alert-weather-details', `Rain: ${current.precipitation} mm/h · Wind: ${current.wind_speed_10m} km/h`);
+        GuardedBerm.setText('weather-summary', `Live conditions at ${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)}`);
+        if (settings.floods && current.precipitation >= 5) {
+          GuardedBerm.addAlert({ id: `weather-${new Date().toISOString().slice(0, 13)}`, category: 'flood', lat: coords.lat, lon: coords.lon, severity: 'critical', title: 'CRITICAL FLOOD WARNING', message: `Heavy precipitation: ${current.precipitation} mm/h.` });
+        } else if (settings.floods && current.precipitation > 0) {
+          GuardedBerm.addAlert({ id: `weather-${new Date().toISOString().slice(0, 13)}`, category: 'flood', lat: coords.lat, lon: coords.lon, severity: 'moderate', title: 'FLOOD WEATHER ADVISORY', message: `Rain detected: ${current.precipitation} mm/h.` });
         }
       } catch (e) {
-        document.getElementById('alert-weather-value').textContent = 'Unavailable';
-        document.getElementById('alert-weather-details').textContent = 'Network error';
+        GuardedBerm.setText('alert-weather-value', 'Unavailable');
+        GuardedBerm.setText('alert-weather-details', 'Network error');
       }
 
       try {
-        const quakes = await GuardedBerm.fetchEarthquakes(coords.lat, coords.lon, 100);
-        quakes.features.forEach(q => {
-          const [qLon, qLat] = q.geometry.coordinates;
-          const dist = GuardedBerm.haversineDistance(coords.lat, coords.lon, qLat, qLon);
-          if (dist <= 100) {
-            GuardedBerm.addAlert({ id: `quake-${q.id}`, severity: q.properties.mag >= 5 ? 'critical' : 'moderate', title: 'SEISMIC ACTIVITY', message: `M ${q.properties.mag.toFixed(1)} earthquake ${dist.toFixed(1)} km away: ${q.properties.place || 'Unknown location'}` });
-          }
+        const quakes = await GuardedBerm.fetchEarthquakes(coords.lat, coords.lon);
+        const nearbyQuakes = quakes.features.filter(q => {
+          const [quakeLon, quakeLat] = q.geometry.coordinates;
+          return q.properties.mag >= 3 &&
+            GuardedBerm.haversineDistance(coords.lat, coords.lon, quakeLat, quakeLon) <= settings.radius;
         });
-      } catch (e) { console.warn('Seismic feed error', e); }
+        GuardedBerm.setText('alert-seismic-value', nearbyQuakes.length ? `${nearbyQuakes.length} recent event${nearbyQuakes.length === 1 ? '' : 's'}` : 'No M 3.0+ events');
+        GuardedBerm.setText('alert-seismic-details', nearbyQuakes[0] ? `Latest: M ${nearbyQuakes[0].properties.mag.toFixed(1)} · ${nearbyQuakes[0].properties.place}` : `No M 3.0+ activity within ${settings.radius} km`);
+        nearbyQuakes.forEach(q => {
+          if (!settings.seismic) return;
+          const [qLon, qLat] = q.geometry.coordinates;
+          GuardedBerm.addAlert({ id: `quake-${q.id}`, category: 'seismic', lat: qLat, lon: qLon, severity: q.properties.mag >= 5 ? 'critical' : q.properties.mag >= 4 ? 'high' : 'moderate', title: 'SEISMIC ACTIVITY', message: `M ${q.properties.mag.toFixed(1)} earthquake: ${q.properties.place || 'Unknown location'}` });
+        });
+      } catch (e) { GuardedBerm.setText('alert-seismic-value', 'Unavailable'); }
 
       renderAlerts();
     }
 
     document.getElementById('refresh-alerts').addEventListener('click', loadLiveFeeds);
+    radiusSlider.addEventListener('input', saveSettings);
+    radiusSlider.addEventListener('change', loadLiveFeeds);
+    document.querySelectorAll('.alert-toggle').forEach(input => input.addEventListener('change', saveSettings));
+    GuardedBerm.setText('radius-value', `${radiusSlider.value} km`);
     loadLiveFeeds();
   </script>
 </body>

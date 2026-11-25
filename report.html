@@ -21,6 +21,7 @@
         <li><a class="nav-link" href="feed.html">Hazard Feed</a></li>
         <li><a class="nav-link" href="alerts.html">Alerts</a></li>
         <li><a class="nav-link" href="profile.html">Profile</a></li>
+        <li class="ms-lg-2"><button class="btn btn-sm btn-outline-navy logout-btn" type="button">Logout</button></li>
       </ul>
     </div>
   </nav>
@@ -43,6 +44,22 @@
               <option>Fallen Tree</option>
               <option>Road Blockage</option>
             </select>
+            <label class="form-label fw-semibold" for="severity">Severity level</label>
+            <select id="severity" class="form-select mb-3" required>
+              <option>Low</option><option selected>Moderate</option><option>High</option><option>Critical</option>
+            </select>
+            <label class="form-label fw-semibold" for="road-status">Road status</label>
+            <select id="road-status" class="form-select mb-3" required>
+              <option>Passable with Caution</option><option>Single Lane Blocked</option><option>Completely Closed</option>
+            </select>
+            <fieldset class="border p-3 mb-3">
+              <legend class="float-none w-auto px-1 fs-6 fw-semibold mb-2">Road impact</legend>
+              <div class="d-flex flex-wrap gap-3">
+                <div class="form-check"><input id="impact-lane" class="form-check-input impact-tag" type="checkbox" value="Lane Blocked"><label class="form-check-label" for="impact-lane">Lane Blocked</label></div>
+                <div class="form-check"><input id="impact-impassable" class="form-check-input impact-tag" type="checkbox" value="Impassable"><label class="form-check-label" for="impact-impassable">Impassable</label></div>
+                <div class="form-check"><input id="impact-debris" class="form-check-input impact-tag" type="checkbox" value="Debris"><label class="form-check-label" for="impact-debris">Debris</label></div>
+              </div>
+            </fieldset>
             <label class="form-label fw-semibold">GPS Location</label>
             <input id="gps" class="form-control mb-2" placeholder="Latitude, Longitude" required>
             <button id="use-location" class="btn btn-outline-navy btn-sm mb-3" type="button">Use my location</button>
@@ -51,7 +68,12 @@
             <label class="form-label fw-semibold">Description</label>
             <textarea id="description" class="form-control mb-3" rows="4" required placeholder="Describe severity, access restrictions, etc."></textarea>
             <label class="form-label fw-semibold">Photo <span class="text-muted fw-normal">(optional)</span></label>
-            <input id="photo" class="form-control mb-4" type="file" accept="image/*">
+            <input id="photo" class="form-control" type="file" accept="image/*">
+            <div id="photo-preview-wrap" class="my-3 d-none">
+              <img id="photo-preview" class="img-fluid border" alt="Selected hazard photo preview" style="max-height: 220px">
+              <div id="photo-name" class="small text-muted mt-1"></div>
+            </div>
+            <div class="mb-3"></div>
             <button class="btn btn-accent w-100 py-3" type="submit">Save hazard report</button>
             <p id="report-status" class="text-success fw-semibold mt-3 mb-0"></p>
           </form>
@@ -77,9 +99,20 @@
       let marker = L.marker([initialCoords.lat, initialCoords.lon], { draggable: true }).addTo(map);
       function updatePin(lat, lon) {
         marker.setLatLng([lat, lon]);
-        document.getElementById('gps').value = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+        GuardedBerm.setValueForElement('gps', `${lat.toFixed(6)}, ${lon.toFixed(6)}`);
       }
       updatePin(initialCoords.lat, initialCoords.lon);
+      let photoUrl;
+      document.getElementById('photo').addEventListener('change', e => {
+        if (photoUrl) URL.revokeObjectURL(photoUrl);
+        const file = e.target.files[0];
+        const wrap = document.getElementById('photo-preview-wrap');
+        if (!file) { if (wrap) wrap.classList.add('d-none'); return; }
+        photoUrl = URL.createObjectURL(file);
+        GuardedBerm.setSource('photo-preview', photoUrl);
+        GuardedBerm.setText('photo-name', file.name);
+        if (wrap) wrap.classList.remove('d-none');
+      });
 
       marker.on('dragend', () => { const pos = marker.getLatLng(); updatePin(pos.lat, pos.lng); });
       map.on('click', (e) => updatePin(e.latlng.lat, e.latlng.lng));
@@ -96,21 +129,33 @@
         try {
           const [lat, lon] = document.getElementById('gps').value.split(',').map(Number);
           if (isNaN(lat) || isNaN(lon)) throw new Error('Invalid GPS coordinates.');
-          document.getElementById('location-name').textContent = await GuardedBerm.reverseGeocode(lat, lon);
-        } catch (err) { GuardedBerm.showToast(err.message, 'danger'); }
+          GuardedBerm.setText('location-name', await GuardedBerm.reverseGeocode(lat, lon));
+        } catch (err) { if (err.name !== 'AbortError') GuardedBerm.showToast(err.message, 'danger'); }
       });
 
       document.getElementById('report-form').addEventListener('submit', (e) => {
         e.preventDefault();
         const [lat, lon] = document.getElementById('gps').value.split(',').map(Number);
         if (isNaN(lat) || isNaN(lon)) return GuardedBerm.showToast('Invalid coordinates.', 'danger');
-        GuardedBerm.createReport({
-          category: document.getElementById('category').value,
-          description: document.getElementById('description').value.trim(),
-          lat, lon
-        });
-        document.getElementById('report-status').textContent = 'Report saved locally and awaiting verification.';
+        try {
+          GuardedBerm.createReport({
+            category: document.getElementById('category').value,
+            description: document.getElementById('description').value.trim(),
+            severity: document.getElementById('severity').value,
+            roadStatus: document.getElementById('road-status').value,
+            impactTags: [...document.querySelectorAll('.impact-tag:checked')].map(input => input.value),
+            locationName: document.getElementById('location-name').textContent.trim(),
+            lat, lon
+          });
+        } catch (error) {
+          GuardedBerm.showToast(error.message, 'danger');
+          return;
+        }
+        GuardedBerm.setText('report-status', 'Report saved locally and awaiting verification.');
         e.target.reset();
+        GuardedBerm.toggleClass('photo-preview-wrap', 'd-none', true);
+        if (photoUrl) { URL.revokeObjectURL(photoUrl); photoUrl = null; }
+        GuardedBerm.setValueForElement('severity', 'Moderate');
         updatePin(lat, lon);
       });
     })();
